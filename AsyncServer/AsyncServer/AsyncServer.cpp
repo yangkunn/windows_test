@@ -9,7 +9,6 @@ int client_id_store[10];
 
 CConnection::~CConnection()
 {
-	cout << m_nID << " has been" << endl;
 }
 
 void CConnection::set_callback(callback cb)
