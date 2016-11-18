@@ -117,12 +117,17 @@ public:
 				memset(&buf, 0x00, sizeof(buf));
 
 				int len = m_Socket.receive(boost::asio::buffer(buf, sizeof(buf)));
-				if (len <= 0)
+
+
 				{
-					cout << "Recv error." << endl;
+					boost::mutex::scoped_lock(mutex);
+					if (len <= 0)
+					{
+						cout << "Recv error." << endl;
+					}
+					else
+						cout << buf << endl;
 				}
-				else
-					cout << buf << endl;
 			}
 			catch (std::exception& e)
 			{
@@ -136,37 +141,35 @@ public:
 
 	void handle_Send()
 	{
-		//string buf;
-		char buf[1024];
+		string buf;
 
 		while (m_bConnect)
 		{
 			if (!IsSocketOpen())
 				break;
 
-			//buf.clear();
-			memset(buf, 0x00, sizeof(buf));
+			buf.clear();
 
 			try
 			{
 				boost::system::error_code error;
+				{
+					boost::mutex::scoped_lock(mutex);
 
-				//cin >> buf;
-				//getline(cin, buf);
-				cin.getline(buf, sizeof(buf)+1);
-				
-				//if(buf.compare("exit") || buf.compare("EXIT")){
-				if (!strcmp(buf, "exit") || !strcmp(buf, "EXIT")) {
+					getline(cin, buf, '\n');
+				}
+
+				if (!buf.compare("exit") || !buf.compare("EXIT")) {
 					m_Socket.close();
 					m_bConnect = false;
 					break;
 				}
-				
-				//int len = boost::asio::write(m_Socket, boost::asio::buffer(buf, strlen(buf)), error);
-				//int len = m_Socket.write_some(boost::asio::buffer(buf.c_str(), buf.length()), error);
-				int len = m_Socket.write_some(boost::asio::buffer(buf, strlen(buf)), error);
+				else if (buf.length() == 0)
+					continue;
 
-				if (len <= 0) {
+				int len = m_Socket.write_some(boost::asio::buffer(buf.c_str(), buf.length()), error);
+
+				if (error == boost::asio::error::eof) {
 					cout << "write Fail" << len << endl;
 					m_Socket.close();
 					m_bConnect = false;
