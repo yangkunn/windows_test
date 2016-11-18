@@ -167,7 +167,6 @@ public:
 				else if (buf.length() == 0)
 					continue;
 
-
 				int len = m_Socket.write_some(boost::asio::buffer(buf.c_str(), buf.length()), error);
 
 				if (error == boost::asio::error::eof) {
