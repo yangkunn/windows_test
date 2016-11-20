@@ -3,7 +3,6 @@
 
 #include "stdafx.h"
 
-
 #include <ctime>
 #include <iostream>
 #include <string>
@@ -14,20 +13,15 @@
 #include <boost/thread.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#include "Message.h"
+
+#define MAX_LENGTH 1024
+
 //const std::string _MY_IP("172.22.32.213");	//천선임님
 const std::string _MY_IP("172.22.32.212");
 
 using namespace std;
 using boost::asio::ip::tcp;
-
-typedef struct __CLIENT_INFO__
-{
-	int  idx;				//4
-	char nickname[128];		//128
-	char time[64];			//64
-	int  length;			//4
-	char message;			//4
-}CLIENT_INFO;
 
 class CProtocol
 {
@@ -104,8 +98,45 @@ public:
 		return true;
 	}
 
+	//void handle_Recive()
+	//{
+	//	Message msg;
+	//	while (m_bConnect)
+	//	{
+	//		if (!IsSocketOpen())
+	//			break;
+
+	//		try
+	//		{
+	//			char buf[1024];
+	//			memset(&buf, 0x00, sizeof(buf));
+
+	//			int len = m_Socket.receive(boost::asio::buffer(buf, sizeof(buf)));
+
+
+	//			{
+	//				boost::mutex::scoped_lock(mutex);
+	//				if (len <= 0)
+	//				{
+	//					cout << "Recv error." << endl;
+	//				}
+	//				else
+	//					cout << buf << endl;
+	//			}
+	//		}
+	//		catch (std::exception& e)
+	//		{
+	//			//여길 타나?
+	//			m_bConnect = false;
+	//			std::cerr << e.what() << std::endl;
+	//		}
+	//	}
+
+	//}
+
 	void handle_Recive()
 	{
+		Message msg;
 		while (m_bConnect)
 		{
 			if (!IsSocketOpen())
@@ -113,20 +144,19 @@ public:
 
 			try
 			{
-				char buf[1024];
-				memset(&buf, 0x00, sizeof(buf));
+				memset(&msg, 0x00, sizeof(Message));
 
-				int len = m_Socket.receive(boost::asio::buffer(buf, sizeof(buf)));
+				int len = m_Socket.receive(boost::asio::buffer((void*)&msg, sizeof(Message)));
 
 
 				{
-					boost::mutex::scoped_lock(mutex);
+					boost::mutex::scoped_lock(mutex_);
 					if (len <= 0)
 					{
 						cout << "Recv error." << endl;
 					}
 					else
-						cout << buf << endl;
+						cout << msg.message << endl;
 				}
 			}
 			catch (std::exception& e)
@@ -136,12 +166,13 @@ public:
 				std::cerr << e.what() << std::endl;
 			}
 		}
-
 	}
 
 	void handle_Send()
 	{
 		string buf;
+
+		Message msg;
 
 		while (m_bConnect)
 		{
@@ -153,11 +184,24 @@ public:
 			try
 			{
 				boost::system::error_code error;
-				{
-					boost::mutex::scoped_lock(mutex);
+				//{
+				//	boost::mutex::scoped_lock(mutex_);
 
-					getline(cin, buf, '\n');
+				//	getline(cin, buf, '\n');
+				//}
+
+				getchar();
+
+				buf.clear();
+				for (int i = 0; i < 10000; i++)
+				{
+					//buf += i;
+					buf = buf + "-";
 				}
+
+				cout << buf << endl;
+
+				memset(&msg, 0x00, sizeof(Message));
 
 				if (!buf.compare("exit") || !buf.compare("EXIT")) {
 					m_Socket.close();
@@ -167,14 +211,77 @@ public:
 				else if (buf.length() == 0)
 					continue;
 
-				int len = m_Socket.write_some(boost::asio::buffer(buf.c_str(), buf.length()), error);
+				//구조체에 보낼 seq
+				int seq = 0;
 
-				if (error == boost::asio::error::eof) {
-					cout << "write Fail" << len << endl;
-					m_Socket.close();
-					m_bConnect = false;
-					break;
+				//입력한 문자열의 길이가 최대 사이즈보다 크면.
+				if (buf.length() > MAX_LENGTH) {
+
+					//문자열의 위치를 나타낼 포인터
+					int position = 0;
+
+					//현재 포지션과 입력한 문자열의 총 길이가 같을 때까지
+					while (position != buf.length()) {
+
+						//구조체 초기화
+						memset(&msg, 0x00, sizeof(Message));
+						sprintf_s(msg.message, buf.substr(position, MAX_LENGTH-1).c_str());
+						msg.message[MAX_LENGTH] = '\0';
+						//!는 진행중, #은 마지막 메시지
+						if (buf.substr(position, MAX_LENGTH).length() < MAX_LENGTH-1)
+							msg.is_last_message = '#';
+						else
+							msg.is_last_message = '!';
+
+						msg.seq = ++seq;
+
+						sprintf_s(msg.header, "%d", 
+							strlen(msg.message) + sizeof(msg.seq) + sizeof(msg.is_last_message));
+
+						//구조체 전송
+						//int len = m_Socket.write_some(boost::asio::buffer(buf.c_str(), buf.length()), error);
+						int len = m_Socket.write_some(boost::asio::buffer((void*)&msg, sizeof(Message)), error);
+
+						cout << "Send Msg(" << seq << "):" << msg.message << endl;
+
+						if (error == boost::asio::error::eof) {
+							cout << "write Fail" << len << endl;
+							m_Socket.close();
+							m_bConnect = false;
+							break;
+						}
+						else
+							cout << "Write Success : " << len << endl;
+
+						//버퍼의 현재 위치를 MAX_LENGTH만큼 조정
+						position += buf.substr(position, MAX_LENGTH-1).length();
+					}
 				}
+				else
+				{
+					//구조체 초기화
+					sprintf_s(msg.message, buf.c_str());
+					msg.seq = 0;		//단일 사이즈의 메시지는 무조건 0
+					msg.is_last_message = '#';	//단일 메시지는 무조건 마지막 메시지임('#')
+					sprintf_s(msg.header, "%d", 
+						strlen(msg.message) + sizeof(msg.seq) + sizeof(msg.is_last_message));
+
+					cout << "Send Msg(" << seq << "):" << msg.message << endl;
+					//구조체 전송
+					//int len = m_Socket.write_some(boost::asio::buffer(buf.c_str(), buf.length()), error);
+					int len = m_Socket.write_some(boost::asio::buffer((char*)&msg, sizeof(Message)), error);
+
+					if (error == boost::asio::error::eof) {
+						cout << "write Fail" << len << endl;
+						m_Socket.close();
+						m_bConnect = false;
+						break;
+					}
+					else
+						cout << "Write Success : " << len << endl;
+
+				}
+
 				m_nTestCount++;
 			}
 			catch (std::exception& e)
