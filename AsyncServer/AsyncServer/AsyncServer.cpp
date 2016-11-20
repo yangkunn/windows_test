@@ -7,6 +7,11 @@
 //클라이언트 ID 저장할 배열
 int client_id_store[10];
 
+
+
+
+
+
 CConnection::~CConnection()
 {
 	cout << "[Log] " << m_nID << " CConnection has been" << endl; 
