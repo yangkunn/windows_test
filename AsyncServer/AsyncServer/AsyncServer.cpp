@@ -9,6 +9,7 @@ int client_id_store[10];
 
 CConnection::~CConnection()
 {
+	cout << "[Log] " << m_nID << " CConnection has been" << endl; 
 }
 
 void CConnection::set_callback(callback cb)
@@ -16,9 +17,25 @@ void CConnection::set_callback(callback cb)
 	m_cb = cb;
 }
 
-void CConnection::do_callback(const char* msg)
+void CConnection::do_callback(Message msg)
 {
-	m_cb(msg, m_nID);
+	//if(msg.is_last_message ==)
+	//{
+	//	boost::mutex::scoped_lock(mutex_);
+	//	message_queue.push_back(msg);
+	//}
+
+	//string make_msg;
+
+	//if (msg.seq == 0) {
+
+	//}
+	//else if (msg.seq > 0) {
+
+	//}
+
+	if( msg.is_last_message == '#' )
+		m_cb(msg, m_nID);
 }
 
 std::string get_current_time()
@@ -36,48 +53,55 @@ std::string get_current_time()
 	return temp_time;
 }
 
-std::string CConnection::user_join(int i)
+Message CConnection::user_join(int i)
 {
-	char temp[512];
-	memset(temp, 0x00, sizeof(temp));
-	sprintf(temp, "%s (%d)님이 입장하셨습니다.", get_current_time().c_str(), i);
-	return temp;
+	Message msg;
+	sprintf(msg.message, "%s (%d)님이 입장하셨습니다.", get_current_time().c_str(), i);
+	msg.seq = 0;
+	msg.is_last_message = '#';
+	sprintf(msg.header, "%d", strlen(msg.message) + sizeof(msg.seq));
+	return msg;
 }
 
-std::string CConnection::user_exit(int i)
+Message CConnection::user_exit(int i)
 {
-	char temp[512];
-	memset(temp, 0x00, sizeof(temp));
-	sprintf(temp, "%s (%d)님이 퇴장하셨습니다.", get_current_time().c_str(), i);
-	return temp;
+	Message msg;
+	sprintf(msg.message, "%s (%d)님이 퇴장하셨습니다.", get_current_time().c_str(), i);
+	msg.seq = 0;
+	msg.is_last_message = '#';
+	sprintf(msg.header, "%d", strlen(msg.message) + sizeof(msg.seq));
+	return msg;
 }
 
-std::string CConnection::user_send_message(const char* msg, int i)
+Message CConnection::user_send_message(const char* str, int i)
 {
-	char temp[512];
-	memset(temp, 0x00, sizeof(temp));
-	sprintf(temp, "%s(%d) %s", get_current_time().c_str(), i, msg);
-	return temp;
+	Message msg;
+	sprintf(msg.message, "%s(%d) %s", get_current_time().c_str(), i, str);
+	msg.seq = 0;
+	msg.is_last_message = '#';
+	sprintf(msg.header, "%d", strlen(msg.message) + sizeof(msg.seq));
+	return msg;
 }
 
 void CConnection::start(int nID)
 {
 	m_nID = nID;
 
-	cout << "Connected From : " << m_Socket.remote_endpoint().address() << endl;
+	cout << "[Log]Connected From : " << m_Socket.remote_endpoint().address() << endl;
 
-	do_callback(user_join(m_nID).c_str());
+	do_callback(user_join(m_nID));
 
-	boost::asio::async_write(m_Socket, boost::asio::buffer(m_sMessage),
+	/*boost::asio::async_write(m_Socket, boost::asio::buffer(m_sMessage),
 		boost::bind(&CConnection::handle_Accept, shared_from_this(),
 			boost::asio::placeholders::error,
-			boost::asio::placeholders::bytes_transferred));
+			boost::asio::placeholders::bytes_transferred));*/
 
-	memset(m_szRecvBuf, 0x00, sizeof(m_szRecvBuf));
-	m_Socket.async_receive(boost::asio::buffer(m_szRecvBuf, sizeof(m_szRecvBuf)),
+	memset(&m_Message, 0x00, sizeof(Message));
+	m_Socket.async_receive(boost::asio::buffer((void*)&m_Message, sizeof(Message)),
 		boost::bind(&CConnection::handle_Recv, shared_from_this(),
 			boost::asio::placeholders::error,
 			boost::asio::placeholders::bytes_transferred));
+
 }
 
 void CConnection::handle_Wait_Recv(const boost::system::error_code& error, size_t recv)
@@ -103,46 +127,89 @@ void CConnection::handle_Accept(const boost::system::error_code& /*error*/, size
 
 }
 
+//void CConnection::handle_Recv(const boost::system::error_code& error, size_t t)
+//{
+//	if (!error)  // 0 이 성공 나머지는 오류 플러그 
+//	{
+//		// 메시지가 들어있으면 
+//		if (strlen(m_szRecvBuf) > 0)
+//		{
+//			//signal로 보낸다.
+//			//do_callback(user_send_message(m_szRecvBuf, m_nID).c_str());
+//			do_callback(user_send_message(m_Message.message, m_nID).c_str());
+//			cout << m_Message.seq << ":";
+//			cout << m_Message.message << endl;
+//		}
+//
+//		cout << m_nID << "] (" << m_Message.message << ")" << endl;
+//		
+//		memset(m_szRecvBuf, 0x00, sizeof(m_szRecvBuf));
+//
+//		//메시지 대기 후 함수 재호출 반복
+//		m_Socket.async_read_some(boost::asio::buffer(m_szRecvBuf, sizeof(m_szRecvBuf)),
+//			boost::bind(&CConnection::handle_Recv, shared_from_this(),
+//				boost::asio::placeholders::error,
+//				boost::asio::placeholders::bytes_transferred));
+//
+//	}
+//	else {
+//		std::cout << m_nID << " Disconnect(Write) : " << error.message() << std::endl;
+//		del_signal(sig);
+//
+//		//클라이언트 종료 로직
+//		m_Socket.shutdown_receive;
+//		do_callback(user_exit(m_nID).c_str());
+//		m_Socket.shutdown_send;
+//		m_Socket.close();
+//
+//		this->~CConnection();
+//	}
+//}
+
 void CConnection::handle_Recv(const boost::system::error_code& error, size_t t)
 {
 	if (!error)  // 0 이 성공 나머지는 오류 플러그 
 	{
 		// 메시지가 들어있으면 
-		if (strlen(m_szRecvBuf) > 0)
+		if (strlen(m_Message.message) > 0)
 		{
 			//signal로 보낸다.
-			do_callback(user_send_message(m_szRecvBuf, m_nID).c_str());
+			//do_callback(user_send_message(m_szRecvBuf, m_nID).c_str());
+			do_callback(user_send_message(m_Message.message, m_nID));
 		}
 
-		cout << m_nID << "] (" << m_szRecvBuf << ")" << endl;
-		
-		memset(m_szRecvBuf, 0x00, sizeof(m_szRecvBuf));
+		cout << m_nID << "] (" << m_Message.seq << ":" << m_Message.message << ")" << endl;
 
+		memset(&m_Message, 0x00, sizeof(Message));
+		
 		//메시지 대기 후 함수 재호출 반복
-		m_Socket.async_read_some(boost::asio::buffer(m_szRecvBuf, sizeof(m_szRecvBuf)),
+		m_Socket.async_read_some(boost::asio::buffer((void*)&m_Message, sizeof(Message)),
 			boost::bind(&CConnection::handle_Recv, shared_from_this(),
 				boost::asio::placeholders::error,
 				boost::asio::placeholders::bytes_transferred));
 
 	}
-	else {
-		std::cout << m_nID << " Disconnect(Write) : " << error.message() << std::endl;
+	else 
+	{
+		std::cout << "[Log] " <<  m_nID << " Disconnect(Write) : " << error.message() << std::endl;
 		del_signal(sig);
 
 		//클라이언트 종료 로직
 		m_Socket.shutdown_receive;
-		do_callback(user_exit(m_nID).c_str());
+		do_callback(user_exit(m_nID));
 		m_Socket.shutdown_send;
 		m_Socket.close();
+
+		this->~CConnection();
 	}
 }
 
-void CConnection::add_signal(boost::signals2::signal<void(const char*, int)> & signal)
+void CConnection::add_signal(boost::signals2::signal<void(Message, int)> & signal)
 {
 	connection = signal.connect(boost::bind(&CConnection::send, shared_from_this(), _1, _2));
 }
 
-void CConnection::del_signal(boost::signals2::signal<void(const char*, int)>& signal)
+void CConnection::del_signal(boost::signals2::signal<void(Message, int)>& signal)
 {
 	signal.disconnect(connection);
 }
@@ -152,24 +219,24 @@ tcp::socket& CConnection::socket()
 	return m_Socket;
 }
 
-void CConnection::send(const char * msg, int id)
+void CConnection::send(Message msg, int id)
 {
 
 	if (id == m_nID)
 		return;
 
-	cout << "Send " << id << " -> " << m_nID << endl;
+	cout << "[Log] Send " << id << " -> " << m_nID << endl;
 
-	int msg_len = (int)strlen(msg);
-	if (msg_len > 0)
-	{
-		strcpy(m_szRecvBuf, msg);
+	//int msg_len = (int)strlen(msg);
+	//if (msg_len > 0)
+	//{
+	//	strcpy(m_szRecvBuf, msg);
 
-		if (m_Socket.is_open()) {
-			m_Socket.write_some(boost::asio::buffer(m_szRecvBuf, msg_len));
-			memset(m_szRecvBuf, 0x00, sizeof(m_szRecvBuf));
-		}
-	}
+	//	if (m_Socket.is_open()) {
+	//		m_Socket.write_some(boost::asio::buffer(m_szRecvBuf, msg_len));
+	//		memset(m_szRecvBuf, 0x00, sizeof(m_szRecvBuf));
+	//	}
+	//}
 }
 
 
@@ -227,7 +294,7 @@ private:
 		}
 	}
 
-	void send(const char* msg, int id)
+	void send(Message msg, int id)
 	{
 		sig(msg, id);
 	}
