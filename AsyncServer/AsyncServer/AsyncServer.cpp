@@ -7,11 +7,6 @@
 //클라이언트 ID 저장할 배열
 int client_id_store[10];
 
-
-
-
-
-
 CConnection::~CConnection()
 {
 	cout << "[Log] " << m_nID << " CConnection has been" << endl; 
@@ -95,11 +90,6 @@ void CConnection::start(int nID)
 	cout << "[Log]Connected From : " << m_Socket.remote_endpoint().address() << endl;
 
 	do_callback(user_join(m_nID));
-
-	/*boost::asio::async_write(m_Socket, boost::asio::buffer(m_sMessage),
-		boost::bind(&CConnection::handle_Accept, shared_from_this(),
-			boost::asio::placeholders::error,
-			boost::asio::placeholders::bytes_transferred));*/
 
 	memset(&m_Message, 0x00, sizeof(Message));
 	m_Socket.async_receive(boost::asio::buffer((void*)&m_Message, sizeof(Message)),
